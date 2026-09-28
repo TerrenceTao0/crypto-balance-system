@@ -14,9 +14,10 @@ const MODES = {
         passwordAutoComplete: "current-password",
         footer: { text: "No account?", href: "/", link: "Sign up" },
     },
+
     "sign-up": {
         title: "Create account",
-        subtitle: "Usernames are 3–20 letters, numbers or underscores.",
+        subtitle: "Usernames must be between 3-20 letters.",
         passwordAutoComplete: "new-password",
         footer: { text: "Already have an account?", href: "/login", link: "Log in" },
     },
@@ -24,13 +25,19 @@ const MODES = {
 
 //
 
-export default function AuthForm({ mode }: { mode: keyof typeof MODES }) {
+export default function AuthForm(
+    { mode }
+    : 
+    { mode: keyof typeof MODES }
+) {
+    const router = useRouter()
+
     const [error, setError] = useState("")
     const [loading, setLoading] = useState(false)
-    const router = useRouter()
+
     const { title, subtitle, passwordAutoComplete, footer } = MODES[mode]
 
-    async function submit(event: React.FormEvent<HTMLFormElement>) {
+    async function submit(event: React.SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
 
         const form = new FormData(event.currentTarget)
@@ -41,28 +48,63 @@ export default function AuthForm({ mode }: { mode: keyof typeof MODES }) {
         setError("")
 
         if (mode === "login") {
-            const result = await signIn("credentials", { username, password, redirect: false })
+            try {
+                const result = await signIn(
+                    "credentials", 
+                    { 
+                        username, 
+                        password, 
+                        redirect: false 
+                    }
+                )
 
-            if (result?.ok) {
-                router.push("/")
-                router.refresh()
-                return
+
+                if (result?.ok) {
+                    router.push("/finance")
+                    router.refresh()
+
+                    return
+                }
+
+
+                setError("Invalid username or password")
             }
-
-
-            setError("Invalid username or password")
+            catch {
+                setError("Network error occured")
+            }
         }
         else {
-            const response = await fetch("/api/sign-up", { method: "POST", body: JSON.stringify({ username, password }) })
+            try {
+                const response = await fetch(
+                    "/api/sign-up", 
+                    { 
+                        method: "POST", 
+                        headers: { 
+                            "Content-Type": "application/json" 
+                        },
+                        body: JSON.stringify(
+                            { 
+                                username, 
+                                password 
+                            }
+                        ) 
+                    }
+                )
 
-            if (response.ok) {
-                router.push("/login")
-                return
+
+                if (response.ok) {
+                    router.push("/login")
+
+                    return
+                }
+
+
+                const data = await response.json().catch(() => ({}))
+                setError(data.error ?? "Sign up failed")
             }
-
-
-            const data = await response.json().catch(() => ({}))
-            setError(data.error ?? "Sign up failed")
+            catch {
+                setError("Network error occured")
+            }
         }
 
 
@@ -116,7 +158,7 @@ export default function AuthForm({ mode }: { mode: keyof typeof MODES }) {
                 )}
 
                 <button type="submit" disabled={loading} className="btn btn-primary mt-1">
-                    {loading ? "Please wait…" : title}
+                    {loading ? "..." : title}
                 </button>
             </form>
 

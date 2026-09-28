@@ -42,9 +42,15 @@ export const authOptions: NextAuthOptions = {
     ],
 
     callbacks: {
+        // Re-read the balance on every session fetch so deposits/withdrawals show up.
         async jwt({ token, user }) {
             if (user) {
                 token.id = user.id
+            }
+
+            if (token.id) {
+                const dbUser = await prisma.user.findUnique({ where: { id: token.id }, select: { balance: true } })
+                token.balance = dbUser?.balance ?? 0
             }
 
 
@@ -54,6 +60,7 @@ export const authOptions: NextAuthOptions = {
         async session({ session, token }) {
             if (session.user) {
                 session.user.id = token.id
+                session.user.balance = token.balance
             }
 
 

@@ -9,10 +9,16 @@ export async function POST(request: Request) {
     const { username, password } = await request.json()
 
     if (typeof username !== "string" || !/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-        return NextResponse.json({ error: "Username must be 3-20 letters, numbers or underscores" }, { status: 400 })
+        return NextResponse.json(
+            { error: "Username must be 3-20 letters, numbers or underscores" }, 
+            { status: 400 }
+        )
     }
-    else if (typeof password !== "string" || password.length < 8) {
-        return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 })
+    else if (typeof password !== "string" || password.length < 5) {
+        return NextResponse.json(
+            { error: "Password must be at least 5 characters" }, 
+            { status: 400 }
+        )
     }
 
 
