@@ -39,6 +39,39 @@ export function Panel({
 }
 
 
+export function SuccessView({
+    title,
+    children,
+    onDone,
+}: {
+    title: string
+    children: React.ReactNode
+    onDone: () => void
+}) {
+    return (
+        <div className="card w-full max-w-md p-6 text-center">
+            <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
+                <svg viewBox="0 0 16 16" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+                    <path d="m3.5 8.5 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </div>
+
+            <h1 className="mt-4 text-lg font-semibold">
+                {title}
+            </h1>
+
+            <div className="mt-2 text-muted">
+                {children}
+            </div>
+
+            <button onClick={onDone} className="btn btn-secondary mt-6 w-full">
+                Back to balance
+            </button>
+        </div>
+    )
+}
+
+
 export function AmountField({
     value,
     onChange,

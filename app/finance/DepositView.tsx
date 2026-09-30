@@ -1,12 +1,21 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { AmountField, Panel } from "./ui"
+import { DEPOSIT_WINDOW_MINUTES } from "@/lib/constants"
+import { AmountField, Panel, SuccessView } from "./ui"
 
 //
 
 type Deposit = { address: string, amount: number }
+type Status = "pending" | "confirmed" | "swept" | "expired"
+
+const STATUS_LABELS: Record<Status, string> = {
+    pending: "Waiting for transfer",
+    confirmed: "Transfer detected, settling",
+    swept: "Complete",
+    expired: "Address expired",
+}
 
 //
 
@@ -41,7 +50,16 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
 
 
     if (deposit) {
-        return <Payment deposit={deposit} onDone={onDone} />
+        return (
+            <Payment
+                deposit={deposit}
+                onRetry={() => {
+                    setDeposit(null)
+                    setAmountInput("")
+                }}
+                onDone={onDone}
+            />
+        )
     }
 
 
@@ -69,10 +87,65 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
 }
 
 
-function Payment({ deposit, onDone }: { deposit: Deposit, onDone: () => void }) {
+function Payment({ deposit, onRetry, onDone }: { deposit: Deposit, onRetry: () => void, onDone: () => void }) {
+    const [status, setStatus] = useState<Status>("pending")
+    const [secondsLeft, setSecondsLeft] = useState(DEPOSIT_WINDOW_MINUTES * 60)
+
+    const finished = status === "swept" || status === "expired"
+
+    // Poll until the deposit settles or expires; the server decides when it has expired.
+    useEffect(() => {
+        if (finished) {
+            return
+        }
+
+
+        const countdown = setInterval(() => setSecondsLeft(seconds => Math.max(0, seconds - 1)), 1000)
+
+        const poll = setInterval(async () => {
+            const response = await fetch(`/api/deposit-status/${deposit.address}`).catch(() => null)
+
+            if (response?.ok) {
+                setStatus((await response.json()).status)
+            }
+        }, 10000)
+
+
+        return () => {
+            clearInterval(countdown)
+            clearInterval(poll)
+        }
+    }, [deposit.address, finished])
+
+
+    if (status === "swept") {
+        return (
+            <SuccessView title="Deposit received" onDone={onDone}>
+                Your balance has been credited.
+            </SuccessView>
+        )
+    }
+
+
+    const dot = status === "expired" ? "bg-danger" : status === "confirmed" ? "bg-accent" : "bg-warn animate-pulse"
+    const timer = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`
+
     return (
         <Panel title="Send USDC" onBack={onDone}>
-            <div className="flex justify-center">
+            <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                    <span className={`size-2 rounded-full ${dot}`} />
+                    {STATUS_LABELS[status]}
+                </span>
+
+                {status === "pending" && (
+                    <span className={`font-mono tabular-nums ${secondsLeft < 60 ? "text-danger" : "text-muted"}`}>
+                        {timer}
+                    </span>
+                )}
+            </div>
+
+            <div className="mt-5 flex justify-center">
                 <div className="rounded-lg bg-white p-3">
                     <QRCodeSVG value={deposit.address} size={148} />
                 </div>
@@ -83,10 +156,16 @@ function Payment({ deposit, onDone }: { deposit: Deposit, onDone: () => void }) 
                 <CopyRow label="Amount" value={String(deposit.amount)} suffix=" USDC" />
             </div>
 
-            <p className="mt-5 text-xs leading-relaxed text-muted">
-                Send the exact amount on Polygon Amoy.
-                Funds sent after the address expires have to be recovered manually.
-            </p>
+            {status === "expired" ? (
+                <button onClick={onRetry} className="btn btn-secondary mt-5 w-full">
+                    Start a new deposit
+                </button>
+            ) : (
+                <p className="mt-5 text-xs leading-relaxed text-muted">
+                    Send the exact amount on Polygon Amoy. This page updates on its own once the transfer settles.
+                    Funds sent after the address expires have to be recovered manually.
+                </p>
+            )}
         </Panel>
     )
 }

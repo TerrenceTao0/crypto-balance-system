@@ -29,3 +29,20 @@ export async function createDeposit(userId: string, amount: number) {
 
     return address
 }
+
+
+export async function getDepositStatus(address: string, userId: string) {
+    const deposit = await prisma.crypto_deposit.findUnique({ where: { address } })
+
+    if (!deposit || deposit.userId !== userId) {
+        return null
+    }
+    else if (deposit.status === "pending" && deposit.expiresAt < new Date()) {
+        await prisma.crypto_deposit.update({ where: { address }, data: { status: "expired" } })
+
+        return "expired"
+    }
+
+
+    return deposit.status
+}
