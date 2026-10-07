@@ -1,5 +1,6 @@
 enum DepositStatus {
   pending
+  detected
   confirmed
   swept
   expired
@@ -41,7 +42,8 @@ model crypto_deposit {
   status     DepositStatus @default(pending)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  confirmedAt DateTime? 
+  confirmedAt DateTime?
+  sweepStartedAt DateTime?
   sweptAt DateTime?
 
   @@index([userId])

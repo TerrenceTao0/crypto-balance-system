@@ -8,12 +8,11 @@ import { AmountField, Panel, SuccessView } from "./ui"
 //
 
 type Deposit = { address: string, amountUnits: number }
-type Status = "pending" | "confirmed" | "swept" | "expired"
+type Status = "pending" | "detected" | "confirmed" | "swept" | "expired"
 
-const STATUS_LABELS: Record<Status, string> = {
+const STATUS_LABELS = {
     pending: "Waiting for transfer",
-    confirmed: "Transfer detected, settling",
-    swept: "Complete",
+    detected: "Transfer detected, waiting for confirmation",
     expired: "Address expired",
 }
 
@@ -73,7 +72,7 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
                 <AmountField value={amountInput} onChange={setAmountInput} />
 
                 <p className="text-xs leading-relaxed text-muted">
-                    You&apos;ll get a one-time address on Polygon Amoy. Send only USDC on that network.
+                    You&apos;ll get a one-time address on Polygon. Send only USDC on that network.
                 </p>
 
                 {error && (
@@ -104,7 +103,9 @@ function Payment(
     const [status, setStatus] = useState<Status>("pending")
     const [secondsLeft, setSecondsLeft] = useState(DEPOSIT_WINDOW_MINUTES * 60)
 
-    const finished = status === "swept" || status === "expired"
+    // Sweeping is internal, so for the user a deposit is done once it is credited.
+    const credited = status === "confirmed" || status === "swept"
+    const finished = credited || status === "expired"
 
     
     // Poll until the deposit settles or expires; the server decides when it has expired.
@@ -122,7 +123,7 @@ function Payment(
             if (response?.ok) {
                 setStatus((await response.json()).status)
             }
-        }, 10000)
+        }, 1000)
 
 
         return () => {
@@ -132,7 +133,7 @@ function Payment(
     }, [deposit.address, finished])
 
 
-    if (status === "swept") {
+    if (credited) {
         return (
             <SuccessView title="Deposit received" onDone={onDone}>
                 Your balance has been credited.
@@ -141,7 +142,7 @@ function Payment(
     }
 
 
-    const dot = status === "expired" ? "bg-danger" : status === "confirmed" ? "bg-accent" : "bg-warn animate-pulse"
+    const dot = status === "expired" ? "bg-danger" : status === "detected" ? "bg-accent" : "bg-warn animate-pulse"
     const timer = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`
 
     return (
@@ -176,7 +177,7 @@ function Payment(
                 </button>
             ) : (
                 <p className="mt-5 text-xs leading-relaxed text-muted">
-                    Send the exact amount on Polygon Amoy. This page updates on its own once the transfer settles.
+                    Send the exact amount on Polygon. This page updates on its own once the transfer settles.
                 </p>
             )}
         </Panel>

@@ -4,6 +4,10 @@ export const USDC_SCALE = 1_000_000n
 export const MIN_AMOUNT_UNITS = 1_000_000n
 export const DEPOSIT_WINDOW_MINUTES = 30
 
+export const MAX_BLOCK_RANGE = 2000n
+export const DEPOSIT_GRACE_MINUTES = 60 * 24
+export const SWEEP_CLAIM_MINUTES = 5
+
 //
 
 export function usdcToUnits(value: string): bigint {

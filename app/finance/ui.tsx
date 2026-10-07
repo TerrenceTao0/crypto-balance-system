@@ -49,7 +49,7 @@ export function SuccessView({
     onDone: () => void
 }) {
     return (
-        <div className="card w-full max-w-md p-6 text-center">
+        <div className="card my-auto w-full max-w-md p-6 text-center">
             <div className="mx-auto flex size-10 items-center justify-center rounded-full bg-accent/15 text-accent">
                 <svg viewBox="0 0 16 16" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
                     <path d="m3.5 8.5 3 3 6-7" strokeLinecap="round" strokeLinejoin="round" />
