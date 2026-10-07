@@ -10,7 +10,7 @@ function depositAccount(index: number) {
 
 //
 
-export async function createDeposit(userId: string, amount: number) {
+export async function createDeposit(userId: string, amountUnits: bigint) {
     const counter = await prisma.deposit_counter.upsert({
         where: { id: "global" },
         update: { value: { increment: 1 } },
@@ -23,11 +23,20 @@ export async function createDeposit(userId: string, amount: number) {
     const expiresAt = new Date(Date.now() + DEPOSIT_WINDOW_MINUTES * 60 * 1000)
 
     await prisma.crypto_deposit.create({
-        data: { userId, address, index, amountUsdc: amount, expiresAt },
+        data: { 
+            userId, 
+            address, 
+            index, 
+            amountUnits, 
+            expiresAt 
+        },
     })
 
 
-    return address
+    return {
+        address,
+        amountUnits: amountUnits.toString(),
+    }
 }
 
 

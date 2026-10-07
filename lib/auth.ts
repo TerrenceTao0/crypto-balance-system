@@ -19,10 +19,12 @@ export const authOptions: NextAuthOptions = {
     providers: [
         CredentialsProvider({
             name: "Credentials",
+            
             credentials: {
                 username: { label: "Username", type: "text" },
                 password: { label: "Password", type: "password" },
             },
+
             async authorize(credentials) {
                 if (!credentials?.username || !credentials.password) {
                     return null
@@ -49,18 +51,19 @@ export const authOptions: NextAuthOptions = {
             }
 
             if (token.id) {
-                const dbUser = await prisma.user.findUnique({ where: { id: token.id }, select: { balance: true } })
-                token.balance = dbUser?.balance ?? 0
+                const dbUser = await prisma.user.findUnique({ where: { id: token.id }, select: { balanceUnits: true } })
+                token.balanceUnits = dbUser?.balanceUnits.toString() ?? "0"
             }
 
 
             return token
         },
+        
 
         async session({ session, token }) {
             if (session.user) {
                 session.user.id = token.id
-                session.user.balance = token.balance
+                session.user.balanceUnits = token.balanceUnits as string
             }
 
 

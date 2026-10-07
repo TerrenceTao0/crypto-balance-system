@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
-import { formatUsd } from "@/lib/constants"
+import { unitsToUsdc } from "@/lib/constants"
 import SignOutButton from "../components/SignOutButton"
 import DepositView from "./DepositView"
 
@@ -11,8 +11,36 @@ import DepositView from "./DepositView"
 export default function FinanceClient() {
     const { data: session } = useSession()
     const [view, setView] = useState<"menu" | "deposit">("menu")
+    const [balanceUnits, setBalanceUnits] = useState("0")
 
-    const balance = session?.user?.balance ?? 0
+    useEffect(() => {
+        async function getBalance() {
+            try {
+                const response = await fetch(
+                    "/api/balance",
+                    {
+                        cache: "no-store",
+                    }
+                )
+
+
+                if (!response.ok) {
+                    return 
+                }
+
+
+                const data = await response.json()
+                setBalanceUnits(data.balanceUnits)
+            }
+            catch {
+
+            }
+        }
+
+
+        getBalance()
+    }, [])
+
 
     if (view === "deposit") {
         return <DepositView onDone={() => setView("menu")} />
@@ -28,7 +56,7 @@ export default function FinanceClient() {
 
                 <p className="mt-2 flex items-baseline gap-2">
                     <span className="text-4xl font-semibold tracking-tight tabular-nums">
-                        {formatUsd(balance)}
+                        {unitsToUsdc(balanceUnits)}
                     </span>
 
                     <span className="text-muted">

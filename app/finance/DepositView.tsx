@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { QRCodeSVG } from "qrcode.react"
-import { DEPOSIT_WINDOW_MINUTES } from "@/lib/constants"
+import { DEPOSIT_WINDOW_MINUTES, unitsToUsdc } from "@/lib/constants"
 import { AmountField, Panel, SuccessView } from "./ui"
 
 //
 
-type Deposit = { address: string, amount: number }
+type Deposit = { address: string, amountUnits: number }
 type Status = "pending" | "confirmed" | "swept" | "expired"
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -30,11 +30,15 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
         setLoading(true)
         setError("")
 
-        const response = await fetch("/api/create-deposit", {
-            method: "POST",
-            body: JSON.stringify({ amount: parseFloat(amountInput) }),
-        })
+        const response = await fetch(
+            "/api/create-deposit", 
+            {
+                method: "POST",
+                body: JSON.stringify({ amount: amountInput }),
+            }
+        )
 
+        
         const data = await response.json().catch(() => ({}))
 
         if (response.ok) {
@@ -69,7 +73,7 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
                 <AmountField value={amountInput} onChange={setAmountInput} />
 
                 <p className="text-xs leading-relaxed text-muted">
-                    You&apos;ll get a one-time address on Polygon Amoy. Send only USDC on that network, anything else can&apos;t be recovered.
+                    You&apos;ll get a one-time address on Polygon Amoy. Send only USDC on that network.
                 </p>
 
                 {error && (
@@ -87,12 +91,22 @@ export default function DepositView({ onDone }: { onDone: () => void }) {
 }
 
 
-function Payment({ deposit, onRetry, onDone }: { deposit: Deposit, onRetry: () => void, onDone: () => void }) {
+function Payment(
+{ 
+    deposit, 
+    onRetry, 
+    onDone
+}: { 
+    deposit: Deposit, 
+    onRetry: () => void, 
+    onDone: () => void }
+) {
     const [status, setStatus] = useState<Status>("pending")
     const [secondsLeft, setSecondsLeft] = useState(DEPOSIT_WINDOW_MINUTES * 60)
 
     const finished = status === "swept" || status === "expired"
 
+    
     // Poll until the deposit settles or expires; the server decides when it has expired.
     useEffect(() => {
         if (finished) {
@@ -153,7 +167,7 @@ function Payment({ deposit, onRetry, onDone }: { deposit: Deposit, onRetry: () =
 
             <div className="mt-5 flex flex-col gap-3">
                 <CopyRow label="Address" value={deposit.address} />
-                <CopyRow label="Amount" value={String(deposit.amount)} suffix=" USDC" />
+                <CopyRow label="Amount" value={unitsToUsdc(String(deposit.amountUnits))} suffix=" USDC" />
             </div>
 
             {status === "expired" ? (
@@ -163,7 +177,6 @@ function Payment({ deposit, onRetry, onDone }: { deposit: Deposit, onRetry: () =
             ) : (
                 <p className="mt-5 text-xs leading-relaxed text-muted">
                     Send the exact amount on Polygon Amoy. This page updates on its own once the transfer settles.
-                    Funds sent after the address expires have to be recovered manually.
                 </p>
             )}
         </Panel>

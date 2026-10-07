@@ -1,3 +1,12 @@
+enum DepositStatus {
+  pending
+  confirmed
+  swept
+  expired
+}
+
+//
+
 datasource db {
   provider = "postgresql"
 }
@@ -11,7 +20,8 @@ model User {
   id       String @id @default(cuid())
   name     String @unique
   password String
-  balance  Float  @default(0)
+  balanceUnits BigInt @default(0)
+  deposits crypto_deposit[]
 
   @@map("users")
 }
@@ -19,13 +29,23 @@ model User {
 model crypto_deposit {
   id         String   @id @default(cuid())
   userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   address    String   @unique
   index      Int      @unique
-  amountUsdc Float
-  status     String   @default("pending")
+  amountUnits BigInt 
+  
   txHash     String?
+  blockNumber BigInt?
+
+  status     DepositStatus @default(pending)
   expiresAt  DateTime
   createdAt  DateTime @default(now())
+  confirmedAt DateTime? 
+  sweptAt DateTime?
+
+  @@index([userId])
+  @@index([status])
 }
 
 model deposit_counter {

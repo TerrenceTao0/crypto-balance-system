@@ -1,4 +1,4 @@
-import { MIN_AMOUNT } from "@/lib/constants"
+import { MIN_AMOUNT_UNITS, unitsToUsdc } from "@/lib/constants"
 
 //
 
@@ -100,7 +100,7 @@ export function AmountField({
                     id="amount"
                     type="number"
                     inputMode="decimal"
-                    min={MIN_AMOUNT}
+                    min={unitsToUsdc(MIN_AMOUNT_UNITS)}
                     step="0.01"
                     placeholder="0.00"
                     value={value}
