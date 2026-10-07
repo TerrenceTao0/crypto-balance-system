@@ -2,6 +2,8 @@ export const USDC_DECIMALS = 6
 export const USDC_SCALE = 1_000_000n
 
 export const MIN_AMOUNT_UNITS = 1_000_000n
+export const MIN_WITHDRAW_AMOUNT_UNITS = 1_000_000n
+export const WITHDRAWAL_FEE_PERCENT = 2n
 export const DEPOSIT_WINDOW_MINUTES = 30
 
 export const MAX_BLOCK_RANGE = 2000n

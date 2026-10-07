@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { QRCodeSVG } from "qrcode.react"
-import { DEPOSIT_WINDOW_MINUTES, unitsToUsdc } from "@/lib/constants"
-import { AmountField, Panel, SuccessView } from "./ui"
+import { unitsToUsdc } from "@/lib/constants"
+import { Panel, SuccessView } from "../../ui"
 
 //
 
-type Deposit = { address: string, amountUnits: number }
 type Status = "pending" | "detected" | "confirmed" | "swept" | "expired"
 
 const STATUS_LABELS = {
@@ -18,96 +18,30 @@ const STATUS_LABELS = {
 
 //
 
-export default function DepositView({ onDone }: { onDone: () => void }) {
-    const [amountInput, setAmountInput] = useState("")
-    const [deposit, setDeposit] = useState<Deposit | null>(null)
-    const [error, setError] = useState("")
-    const [loading, setLoading] = useState(false)
-
-    async function submit(event: React.SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        setLoading(true)
-        setError("")
-
-        const response = await fetch(
-            "/api/create-deposit", 
-            {
-                method: "POST",
-                body: JSON.stringify({ amount: amountInput }),
-            }
-        )
-
-        
-        const data = await response.json().catch(() => ({}))
-
-        if (response.ok) {
-            setDeposit(data)
-        }
-        else {
-            setError(data.error ?? "Failed to create deposit")
-        }
-
-
-        setLoading(false)
-    }
-
-
-    if (deposit) {
-        return (
-            <Payment
-                deposit={deposit}
-                onRetry={() => {
-                    setDeposit(null)
-                    setAmountInput("")
-                }}
-                onDone={onDone}
-            />
-        )
-    }
-
-
-    return (
-        <Panel title="Deposit" onBack={onDone}>
-            <form onSubmit={submit} className="flex flex-col gap-4">
-                <AmountField value={amountInput} onChange={setAmountInput} />
-
-                <p className="text-xs leading-relaxed text-muted">
-                    You&apos;ll get a one-time address on Polygon. Send only USDC on that network.
-                </p>
-
-                {error && (
-                    <p className="text-danger">
-                        {error}
-                    </p>
-                )}
-
-                <button type="submit" disabled={loading} className="btn btn-primary">
-                    {loading ? "Creating address…" : "Get deposit address"}
-                </button>
-            </form>
-        </Panel>
-    )
-}
-
-
-function Payment(
-{ 
-    deposit, 
-    onRetry, 
-    onDone
-}: { 
-    deposit: Deposit, 
-    onRetry: () => void, 
-    onDone: () => void }
+export default function Payment(
+{
+    address,
+    amountUnits,
+    expiresAt,
+    initialSecondsLeft,
+    initialStatus,
+}: {
+    address: string,
+    amountUnits: string,
+    expiresAt: number,
+    initialSecondsLeft: number,
+    initialStatus: Status }
 ) {
-    const [status, setStatus] = useState<Status>("pending")
-    const [secondsLeft, setSecondsLeft] = useState(DEPOSIT_WINDOW_MINUTES * 60)
+    const router = useRouter()
+
+    const [status, setStatus] = useState<Status>(initialStatus)
+    const [secondsLeft, setSecondsLeft] = useState(initialSecondsLeft)
 
     // Sweeping is internal, so for the user a deposit is done once it is credited.
     const credited = status === "confirmed" || status === "swept"
     const finished = credited || status === "expired"
 
-    
+
     // Poll until the deposit settles or expires; the server decides when it has expired.
     useEffect(() => {
         if (finished) {
@@ -115,10 +49,11 @@ function Payment(
         }
 
 
-        const countdown = setInterval(() => setSecondsLeft(seconds => Math.max(0, seconds - 1)), 1000)
+        // Counted from the real expiry, so the timer stays right after a reload or a backgrounded tab.
+        const countdown = setInterval(() => setSecondsLeft(Math.max(0, Math.round((expiresAt - Date.now()) / 1000))), 1000)
 
         const poll = setInterval(async () => {
-            const response = await fetch(`/api/deposit-status/${deposit.address}`).catch(() => null)
+            const response = await fetch(`/api/deposit-status/${address}`).catch(() => null)
 
             if (response?.ok) {
                 setStatus((await response.json()).status)
@@ -130,12 +65,12 @@ function Payment(
             clearInterval(countdown)
             clearInterval(poll)
         }
-    }, [deposit.address, finished])
+    }, [address, expiresAt, finished])
 
 
     if (credited) {
         return (
-            <SuccessView title="Deposit received" onDone={onDone}>
+            <SuccessView title="Deposit received" onDone={() => router.push("/finance")}>
                 Your balance has been credited.
             </SuccessView>
         )
@@ -146,7 +81,7 @@ function Payment(
     const timer = `${String(Math.floor(secondsLeft / 60)).padStart(2, "0")}:${String(secondsLeft % 60).padStart(2, "0")}`
 
     return (
-        <Panel title="Send USDC" onBack={onDone}>
+        <Panel title="Send USDC" onBack={() => router.push("/finance")}>
             <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
                     <span className={`size-2 rounded-full ${dot}`} />
@@ -162,17 +97,17 @@ function Payment(
 
             <div className="mt-5 flex justify-center">
                 <div className="rounded-lg bg-white p-3">
-                    <QRCodeSVG value={deposit.address} size={148} />
+                    <QRCodeSVG value={address} size={148} />
                 </div>
             </div>
 
             <div className="mt-5 flex flex-col gap-3">
-                <CopyRow label="Address" value={deposit.address} />
-                <CopyRow label="Amount" value={unitsToUsdc(String(deposit.amountUnits))} suffix=" USDC" />
+                <CopyRow label="Address" value={address} />
+                <CopyRow label="Amount" value={unitsToUsdc(amountUnits)} suffix=" USDC" />
             </div>
 
             {status === "expired" ? (
-                <button onClick={onRetry} className="btn btn-secondary mt-5 w-full">
+                <button onClick={() => router.push("/finance/deposit")} className="btn btn-secondary mt-5 w-full">
                     Start a new deposit
                 </button>
             ) : (

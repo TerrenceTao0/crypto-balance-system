@@ -1,11 +1,12 @@
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts"
 import { prisma } from "./db"
-import { DEPOSIT_WINDOW_MINUTES, MAX_BLOCK_RANGE, DEPOSIT_GRACE_MINUTES, MIN_AMOUNT_UNITS, SWEEP_CLAIM_MINUTES } from "./constants"
+import { DEPOSIT_WINDOW_MINUTES, MAX_BLOCK_RANGE, DEPOSIT_GRACE_MINUTES, MIN_AMOUNT_UNITS, SWEEP_CLAIM_MINUTES, WITHDRAWAL_FEE_PERCENT } from "./constants"
 import { erc20Abi, parseAbiItem } from "viem"
 import { publicClient, walletClient, USDC_ADDRESS } from "./chain"
 
 const TRANSFER_EVENT = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)")
 const MAIN_WALLET_ADDRESS = process.env.MAIN_WALLET_ADDRESS as `0x${string}`
+const PROFIT_WALLET_ADDRESS = process.env.PROFIT_WALLET_ADDRESS as `0x${string}`
 
 //
 
@@ -16,6 +17,17 @@ function depositAccount(index: number) {
 
 function mainAccount() {
     return privateKeyToAccount(`0x${process.env.WALLET_PRIVATE_KEY}`)
+}
+
+
+// The contract call for sending USDC, in the shape viem's contract functions take.
+function usdcTransfer(to: `0x${string}`, amountUnits: bigint) {
+    return {
+        address: USDC_ADDRESS,
+        abi: erc20Abi,
+        functionName: "transfer",
+        args: [to, amountUnits],
+    } as const
 }
 
 //
@@ -51,13 +63,19 @@ export async function createDeposit(userId: string, amountUnits: bigint) {
 
 
 export async function getDepositStatus(address: string, userId: string) {
-    const deposit = await prisma.crypto_deposit.findUnique({ where: { address } })
+    const deposit = await prisma.crypto_deposit.findUnique({
+        where: { address } 
+    })
 
+    
     if (!deposit || deposit.userId !== userId) {
         return null
     }
     else if (deposit.status === "pending" && deposit.expiresAt < new Date()) {
-        await prisma.crypto_deposit.update({ where: { address }, data: { status: "expired" } })
+        await prisma.crypto_deposit.update({
+            where: { address }, data: { status: "expired" } 
+        })
+
 
         return "expired"
     }
@@ -242,12 +260,7 @@ export async function sweepDeposits() {
 
             // Nothing left means an earlier run already moved it but died before saving that.
             if (balance > 0n) {
-                const transfer = {
-                    address: USDC_ADDRESS,
-                    abi: erc20Abi,
-                    functionName: "transfer",
-                    args: [MAIN_WALLET_ADDRESS, balance],
-                } as const
+                const transfer = usdcTransfer(MAIN_WALLET_ADDRESS, balance)
 
 
                 // Price the transfer at current gas fees, since a fixed top-up breaks when fees spike.
@@ -293,5 +306,77 @@ export async function sweepDeposits() {
 
 
     return swept
+}
+
+
+// Returns null when the balance is too low. Throws when the payout did not go through.
+export async function processWithdraw(userId: string, amountUnits: bigint, address: `0x${string}`) {
+    const feeUnits = amountUnits * WITHDRAWAL_FEE_PERCENT / 100n
+    const netUnits = amountUnits - feeUnits
+
+    // Take the money and record the withdrawal together, so a crash cannot leave one without the other.
+    const withdrawal = await prisma.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({
+            where: { id: userId, balanceUnits: { gte: amountUnits } },
+            data: { balanceUnits: { decrement: amountUnits } },
+        })
+
+        if (count === 0) {
+            return null
+        }
+
+        return tx.withdrawal.create({ data: { userId, address, amountUnits, feeUnits } })
+    })
+
+    if (!withdrawal) {
+        return null
+    }
+
+
+    // Marks it failed and gives the balance back, both or neither.
+    const refund = () => prisma.$transaction([
+        prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { status: "failed" } }),
+        prisma.user.update({ where: { id: userId }, data: { balanceUnits: { increment: amountUnits } } }),
+    ])
+
+    const wallet = walletClient(mainAccount())
+    let transactionHash: `0x${string}`
+
+    try {
+        transactionHash = await wallet.writeContract(usdcTransfer(address, netUnits))
+    }
+    catch (error) {
+        // The transfer was not sent, so nothing was paid out.
+        await refund()
+
+        throw error
+    }
+
+
+    // Saved straight away: from here on the hash is how to find out what happened.
+    await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { txHash: transactionHash } })
+
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash })
+
+    // A reverted transaction still has a receipt.
+    if (receipt.status !== "success") {
+        await refund()
+
+        throw new Error(`withdrawal reverted: ${transactionHash}`)
+    }
+
+
+    await prisma.withdrawal.update({ where: { id: withdrawal.id }, data: { status: "completed" } })
+
+    // Best effort: if this fails the fee simply stays in the main wallet.
+    try {
+        await wallet.writeContract(usdcTransfer(PROFIT_WALLET_ADDRESS, feeUnits))
+    }
+    catch (error) {
+        console.error(`[withdraw] fee transfer for ${withdrawal.id} failed:`, error)
+    }
+
+
+    return { transactionHash, amountUnits: netUnits.toString() }
 }
 

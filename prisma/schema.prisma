@@ -6,6 +6,12 @@ enum DepositStatus {
   expired
 }
 
+enum WithdrawalStatus {
+  pending
+  completed
+  failed
+}
+
 //
 
 datasource db {
@@ -23,6 +29,7 @@ model User {
   password String
   balanceUnits BigInt @default(0)
   deposits crypto_deposit[]
+  withdrawals withdrawal[]
 
   @@map("users")
 }
@@ -45,6 +52,23 @@ model crypto_deposit {
   confirmedAt DateTime?
   sweepStartedAt DateTime?
   sweptAt DateTime?
+
+  @@index([userId])
+  @@index([status])
+}
+
+model withdrawal {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  address     String
+  amountUnits BigInt
+  feeUnits    BigInt
+  txHash      String?
+
+  status      WithdrawalStatus @default(pending)
+  createdAt   DateTime @default(now())
 
   @@index([userId])
   @@index([status])
