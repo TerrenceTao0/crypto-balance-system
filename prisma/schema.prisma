@@ -53,8 +53,26 @@ model crypto_deposit {
   sweepStartedAt DateTime?
   sweptAt DateTime?
 
+  transfers deposit_transfer[]
+
   @@index([userId])
   @@index([status])
+}
+
+model deposit_transfer {
+  id          String         @id @default(cuid())
+
+  depositId   String
+  deposit     crypto_deposit @relation(fields: [depositId], references: [id], onDelete: Cascade)
+
+  txHash      String
+  logIndex    Int
+  amountUnits BigInt
+  blockNumber BigInt
+  createdAt   DateTime       @default(now())
+
+  @@unique([txHash, logIndex])
+  @@index([depositId])
 }
 
 model withdrawal {
